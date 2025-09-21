@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, json, time, base64, subprocess, shlex
+import os, json, time, base64, subprocess, shlex, sys
 import boto3, requests
 from datetime import datetime
 
@@ -44,10 +44,18 @@ if not upload_base_path:
 video_urls = []
 
 # ========================== HELPERS ==========================
+def send_callback(endpoint, payload):
+    if not callback_url:
+        return
+    url = f"{callback_url}/{generate_video_id}/{endpoint}"
+    headers = {"Authorization": f"Bearer {callback_api_key}"} if callback_api_key else {}
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=30)
+        print(f"[CALLBACK:{endpoint}] {r.status_code} {r.text}")
+    except Exception as e:
+        print(f"[ERROR] Callback {endpoint} failed:", e)
+
 def ensure_duration(in_path, out_path, target_sec):
-    """
-    Paksa durasi output ~ target_sec pakai ffmpeg (cut atau loop).
-    """
     try:
         probe = subprocess.run(
             ["ffprobe","-v","error","-show_entries","format=duration","-of","default=noprint_wrappers=1:nokey=1", in_path],
@@ -72,52 +80,65 @@ def ensure_duration(in_path, out_path, target_sec):
     else:
         subprocess.run(["cp", in_path, out_path], check=False)
 
-# ========================== MAIN LOOP (QUEUE) ==========================
-for idx, prompt in enumerate(prompts):
-    print(f"[INFO] ({idx+1}/{len(prompts)}) Generating: {prompt}")
-    tmp_out   = f"/tmp/{generate_video_id}_{idx}.mp4"
-    final_out = f"/tmp/{generate_video_id}_{idx}_final.mp4"
+# ========================== MAIN ==========================
+try:
+    for idx, prompt in enumerate(prompts):
+        print(f"[INFO] ({idx+1}/{len(prompts)}) Generating: {prompt}")
+        tmp_out   = f"/tmp/{generate_video_id}_{idx}.mp4"
+        final_out = f"/tmp/{generate_video_id}_{idx}_final.mp4"
 
-    # --- PANGGIL generate.py WAN2.1 ---
-    cmd = f"python3 generate.py --task {wan_task} --size {wan_size} --ckpt_dir {shlex.quote(ckpt_dir)} --prompt {shlex.quote(prompt)}"
-    try:
-        subprocess.run(cmd, cwd=project_dir, shell=True, check=True)
-        produced = os.path.join(project_dir, "output.mp4")
-        if not os.path.exists(produced):
+        try:
+            # --- PANGGIL generate.py WAN2.1 ---
+            cmd = f"python3 generate.py --task {wan_task} --size {wan_size} --ckpt_dir {shlex.quote(ckpt_dir)} --prompt {shlex.quote(prompt)}"
+            subprocess.run(cmd, cwd=project_dir, shell=True, check=True)
+            produced = os.path.join(project_dir, "output.mp4")
+            if not os.path.exists(produced):
+                produced = tmp_out
+                open(produced, "wb").write(b"DUMMY")
+        except Exception as e:
+            print("[ERROR] generate.py failed:", e)
             produced = tmp_out
             open(produced, "wb").write(b"DUMMY")
-    except Exception as e:
-        print("[ERROR] generate.py failed:", e)
-        produced = tmp_out
-        open(produced, "wb").write(b"DUMMY")
 
-    # --- PAKSA DURASI SESUAI TARGET ---
-    ensure_duration(produced, final_out, target_duration)
+        # --- PAKSA DURASI SESUAI TARGET ---
+        ensure_duration(produced, final_out, target_duration)
 
-    # --- UPLOAD KE S3 ---
-    s3_key = f"{upload_base_path}/{idx}.mp4"
-    try:
-        s3.upload_file(final_out, s3_bucket, s3_key)
-        video_url = f"{public_base_url}/{s3_key}"
-        video_urls.append(video_url)
-        print(f"[INFO] Uploaded: {video_url}")
-    except Exception as e:
-        print("[ERROR] Upload failed:", e)
+        # --- UPLOAD KE S3 ---
+        s3_key = f"{upload_base_path}/{idx}.mp4"
+        video_url = None
+        try:
+            s3.upload_file(final_out, s3_bucket, s3_key)
+            video_url = f"{public_base_url}/{s3_key}"
+            video_urls.append(video_url)
+            print(f"[INFO] Uploaded: {video_url}")
+        except Exception as e:
+            print("[ERROR] Upload failed:", e)
 
-    time.sleep(3)
+        # --- CALLBACK PROGRESS ---
+        send_callback("progress", {
+            "status": f"GENERATING {idx+1}/{len(prompts)}",
+            "current_index": idx,
+            "current_url": video_url,
+            "video_urls": video_urls,
+        })
 
-# ========================== CALLBACK ==========================
-if callback_url:
-    payload = {
+        time.sleep(3)
+
+    # ========================== CALLBACK SUCCESS ==========================
+    send_callback("success", {
         "action": "start",
         "status": "GENERATING",
         "video_urls": video_urls
-    }
-    headers = {"Authorization": f"Bearer {callback_api_key}"} if callback_api_key else {}
-    try:
-        r = requests.post(callback_url, json=payload, headers=headers, timeout=30)
-        print("[INFO] Callback:", r.status_code, r.text)
-    except Exception as e:
-        print("[ERROR] Callback failed:", e)
+    })
+
+except Exception as e:
+    # ========================== CALLBACK FAIL ==========================
+    print("[FATAL] Pipeline failed:", e)
+    send_callback("fail", {
+        "status": "FAILED",
+        "failed_reason": str(e),
+        "video_urls": video_urls
+    })
+    sys.exit(1)
 
 print("[DONE] All videos processed.")
