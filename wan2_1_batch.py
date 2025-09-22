@@ -146,6 +146,19 @@ try:
         raise FileNotFoundError("generate.py not found in expected locations.")
     print(f"[INFO] Using generate.py from {generate_dir}")
 
+
+    # ========================== FRAME_NUM CALC ==========================
+    def calc_frame_num(target_sec, fps=16):
+        """Hitung frame_num sesuai target detik (harus 4n+1)."""
+        raw = int(round(fps * target_sec))
+        return 4 * round((raw - 1) / 4) + 1
+
+
+    # contoh kalkulasi global
+    default_fps = 16  # T2V config biasanya 16 fps
+    frame_num = calc_frame_num(target_duration, default_fps)
+    print(f"[INFO] Auto-calculated frame_num={frame_num} (~{frame_num / default_fps:.2f} sec)")
+
     for idx, prompt in enumerate(prompts):
         print(f"[INFO] ({idx+1}/{len(prompts)}) Generating: {prompt}")
         tmp_out = f"/tmp/{generate_number}_{idx}.mp4"
@@ -154,7 +167,14 @@ try:
 
         try:
             # --- GENERATE VIDEO ---
-            cmd = f"python3 generate.py --task {wan_task} --size {wan_size} --ckpt_dir {shlex.quote(ckpt_dir)} --prompt {shlex.quote(prompt)}"
+            cmd = (
+                f"python3 generate.py "
+                f"--task {wan_task} --size {wan_size} "
+                f"--ckpt_dir {shlex.quote(ckpt_dir)} "
+                f"--prompt {shlex.quote(prompt)} "
+                f"--frame_num {frame_num}"
+            )
+
             subprocess.run(cmd, cwd=generate_dir, shell=True, check=True)
             produced = os.path.join("/tmp", f"{generate_number}_{idx}.mp4")
             if not os.path.exists(produced):
@@ -214,6 +234,42 @@ try:
         })
 
         time.sleep(3)
+
+    # ========================== SEGMENT MERGE ==========================
+    # Jika hasil tetap pendek (misal < target_duration - 1), gabungkan segmen
+    if len(video_urls) > 1 or target_duration > 10:
+        try:
+            list_path = f"/tmp/{generate_number}_concat.txt"
+            with open(list_path, "w") as f:
+                for idx in range(len(prompts)):
+                    final_out = f"/tmp/{generate_number}_{idx}_final.mp4"
+                    f.write(f"file '{final_out}'\n")
+
+            concat_out = f"/tmp/{generate_number}_concat_final.mp4"
+            subprocess.run(
+                ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                 "-i", list_path, "-c:v", "libx264", "-pix_fmt", "yuv420p", concat_out],
+                check=False
+            )
+
+            # Upload concat juga
+            s3_key = f"{upload_base_path}/concat_final.mp4"
+            s3.upload_file(
+                concat_out,
+                s3_bucket,
+                s3_key,
+                ExtraArgs={"ACL": "public-read", "ContentType": "video/mp4"}
+            )
+            concat_url = f"{public_base_url}/{s3_key}"
+            video_urls.append(concat_url)
+            print(f"[INFO] Uploaded concatenated video: {concat_url}")
+            send_callback("upload", {
+                "status": "SUCCESS",
+                "concat_url": concat_url,
+                "video_urls": video_urls
+            })
+        except Exception as e:
+            print("[WARN] Concat step failed:", e)
 
     # --- SUCCESS ---
     send_callback("success", {
