@@ -124,7 +124,7 @@ try:
         try:
             # --- GENERATE VIDEO ---
             cmd = f"python3 generate.py --task {wan_task} --size {wan_size} --ckpt_dir {shlex.quote(ckpt_dir)} --prompt {shlex.quote(prompt)}"
-            subprocess.run(cmd, cwd=project_dir, shell=True, check=True)
+            subprocess.run(cmd, cwd=os.path.join(project_dir, "Wan2.1"), shell=True, check=True)
             produced = os.path.join(project_dir, "output.mp4")
             if not os.path.exists(produced):
                 produced = tmp_out
