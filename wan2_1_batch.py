@@ -192,6 +192,18 @@ try:
             produced = tmp_out
             open(produced, "wb").write(b"DUMMY")
 
+        # --- DUMMY-SAFE FIX ---
+        if os.environ.get("WAN_DUMMY") == "1":
+            produced = f"/tmp/{generate_number}_{idx}.mp4"
+            if not os.path.exists(produced):
+                # fallback: bikin dummy kecil biar pasti ada file
+                subprocess.run(
+                    ["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=size=256x256:rate=8",
+                     "-t", str(target_duration), "-pix_fmt", "yuv420p", produced],
+                    check=False
+                )
+            print(f"[DUMMY] Ensured dummy file exists at {produced}")
+
         # --- PAKSA DURASI ---
         ensure_duration(produced, final_out, target_duration)
 
