@@ -89,6 +89,21 @@ def ensure_duration(in_path, out_path, target_sec):
 
 # ========================== MAIN ==========================
 try:
+    send_callback("process",{
+        "status": "PREPARING_PROCESSING",
+        "generate_number": generate_number,
+        "total_prompts": len(prompts),
+        "upload_base_path": upload_base_path,
+        "target_duration": target_duration,
+        "wan_task": wan_task,
+        "wan_size": wan_size,
+        "ckpt_dir": ckpt_dir,
+        "project_dir": project_dir,
+        "public_base_url": public_base_url,
+        "s3_bucket": s3_bucket,
+        "date_path": date_path,
+    })
+
     for idx, prompt in enumerate(prompts):
         print(f"[INFO] ({idx+1}/{len(prompts)}) Generating: {prompt}")
         tmp_out = f"/tmp/{generate_number}_{idx}.mp4"
@@ -105,6 +120,14 @@ try:
                 open(produced, "wb").write(b"DUMMY")
         except Exception as e:
             print("[ERROR] generate.py failed:", e)
+            send_callback("fail",{
+                "status": "FAILED",
+                "type_error": "GENERATE_FAILED",
+                "failed_reason": str(e),
+                "current_index": idx,
+                "current_prompt": prompt,
+                "video_urls": video_urls
+            })
             produced = tmp_out
             open(produced, "wb").write(b"DUMMY")
 
@@ -136,7 +159,7 @@ try:
                 "status": "FAILED",
                 "failed_reason": str(e),
                 "current_index": idx,
-                "video_url": None,
+                "video_url": "",
                 "video_urls": video_urls,
             })
 
@@ -162,6 +185,7 @@ except Exception as e:
     print("[FATAL] Pipeline failed:", e)
     send_callback("fail", {
         "status": "FAILED",
+        "type_error": "FATAL_ERROR",
         "failed_reason": str(e),
         "video_urls": video_urls
     })
