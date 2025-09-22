@@ -156,10 +156,9 @@ try:
             # --- GENERATE VIDEO ---
             cmd = f"python3 generate.py --task {wan_task} --size {wan_size} --ckpt_dir {shlex.quote(ckpt_dir)} --prompt {shlex.quote(prompt)}"
             subprocess.run(cmd, cwd=generate_dir, shell=True, check=True)
-            produced = os.path.join(generate_dir, "output.mp4")
+            produced = os.path.join("/tmp", f"{generate_number}_{idx}.mp4")
             if not os.path.exists(produced):
-                produced = tmp_out
-                open(produced, "wb").write(b"DUMMY")
+                produced = os.path.join(generate_dir, "output.mp4")
         except Exception as e:
             print("[ERROR] generate.py failed:", e)
             send_callback("fail", {

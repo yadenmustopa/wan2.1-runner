@@ -301,9 +301,8 @@ def generate(args):
     # --- Early exit if dummy mode ---
     if DUMMY_MODE and rank == 0:
         if args.save_file is None:
-            args.save_file = os.path.join(
-                "/tmp", f"{os.environ.get('GENERATE_NUMBER', 'dummy')}_0.mp4"
-            )
+            formatted_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            args.save_file = f"/tmp/{os.environ.get('GENERATE_NUMBER', 'dummy')}_0.mp4"
         save_path = args.save_file
         logging.warning("[DUMMY] Running in dummy mode, skipping real model inference.")
         generate_dummy_video(save_path, frame_num=8, size=(256, 256))
