@@ -16,3 +16,15 @@ export PUBLIC_BASE_URL="https://mybucket.sgp1.vultrobjects.com"
 export BASE_URL="https://my-backend.com"
 export PROJECT_DIR="/root/project"
 export PROMPTS='["prompt 1", "prompt 2"]'
+```
+
+## Warn for install dependencies
+1. If using small GPU (<30GB VRAM, misal 4090/3090/4080/3080)
+```shell
+pip3 install -r requirements-lite.txt --extra-index-url https://download.pytorch.org/whl/cu121
+```
+
+2. If using large GPU (>=30GB VRAM, misal 4090 24GB/3090 24GB/4080 32GB/3080 24GB/3090 Ti 24GB/4090 Ti 24GB)
+```shell
+pip3 install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
+```

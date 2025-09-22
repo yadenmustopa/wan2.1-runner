@@ -95,6 +95,30 @@ def ensure_duration(in_path, out_path, target_sec):
     else:
         subprocess.run(["cp", in_path, out_path], check=False)
 
+
+# ========================== GPU CHECK ==========================
+def check_gpu():
+    try:
+        import torch
+        if torch.cuda.is_available():
+            vram = torch.cuda.get_device_properties(0).total_memory // (1024**3)  # GB
+            name = torch.cuda.get_device_name(0)
+            print(f"[INFO] Detected GPU: {name} ({vram} GB VRAM)")
+            if vram < 8:
+                print("[WARN] VRAM terlalu kecil (<8GB). flash_attn akan di-skip. "
+                      "Gunakan requirements-lite.txt.")
+            elif vram < 30:
+                print("[WARN] GPU terdeteksi menengah (8–30GB). Bisa jalan tapi mungkin lambat.")
+            else:
+                print("[INFO] GPU besar terdeteksi (≥30GB VRAM). Disarankan install full requirements "
+                      "dengan flash_attn.")
+        else:
+            print("[WARN] Tidak ada GPU terdeteksi, akan fallback ke CPU (sangat lambat).")
+    except Exception as e:
+        print("[ERROR] Gagal cek GPU:", e)
+
+check_gpu()
+
 # ========================== MAIN ==========================
 try:
     send_callback("process", {
