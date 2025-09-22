@@ -120,6 +120,7 @@ try:
     generate_dir = next((c for c in candidates if os.path.exists(os.path.join(c, "generate.py"))), None)
     if not generate_dir:
         raise FileNotFoundError("generate.py not found in expected locations.")
+    print(f"[INFO] Using generate.py from {generate_dir}")
 
     for idx, prompt in enumerate(prompts):
         print(f"[INFO] ({idx+1}/{len(prompts)}) Generating: {prompt}")
