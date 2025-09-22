@@ -247,41 +247,41 @@ try:
 
         time.sleep(3)
 
-    # ========================== SEGMENT MERGE ==========================
-    # Jika hasil tetap pendek (misal < target_duration - 1), gabungkan segmen
-    if len(video_urls) > 1 or target_duration > 10:
-        try:
-            list_path = f"/tmp/{generate_number}_concat.txt"
-            with open(list_path, "w") as f:
-                for idx in range(len(prompts)):
-                    final_out = f"/tmp/{generate_number}_{idx}_final.mp4"
-                    f.write(f"file '{final_out}'\n")
-
-            concat_out = f"/tmp/{generate_number}_concat_final.mp4"
-            subprocess.run(
-                ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
-                 "-i", list_path, "-c:v", "libx264", "-pix_fmt", "yuv420p", concat_out],
-                check=False
-            )
-
-            # Upload concat juga
-            s3_key = f"{upload_base_path}/concat_final.mp4"
-            s3.upload_file(
-                concat_out,
-                s3_bucket,
-                s3_key,
-                ExtraArgs={"ACL": "public-read", "ContentType": "video/mp4"}
-            )
-            concat_url = f"{public_base_url}/{s3_key}"
-            video_urls.append(concat_url)
-            print(f"[INFO] Uploaded concatenated video: {concat_url}")
-            send_callback("upload", {
-                "status": "SUCCESS",
-                "concat_url": concat_url,
-                "video_urls": video_urls
-            })
-        except Exception as e:
-            print("[WARN] Concat step failed:", e)
+    # # ========================== SEGMENT MERGE ==========================
+    # # Jika hasil tetap pendek (misal < target_duration - 1), gabungkan segmen
+    # if len(video_urls) > 1 or target_duration > 10:
+    #     try:
+    #         list_path = f"/tmp/{generate_number}_concat.txt"
+    #         with open(list_path, "w") as f:
+    #             for idx in range(len(prompts)):
+    #                 final_out = f"/tmp/{generate_number}_{idx}_final.mp4"
+    #                 f.write(f"file '{final_out}'\n")
+    #
+    #         concat_out = f"/tmp/{generate_number}_concat_final.mp4"
+    #         subprocess.run(
+    #             ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+    #              "-i", list_path, "-c:v", "libx264", "-pix_fmt", "yuv420p", concat_out],
+    #             check=False
+    #         )
+    #
+    #         # Upload concat juga
+    #         s3_key = f"{upload_base_path}/concat_final.mp4"
+    #         s3.upload_file(
+    #             concat_out,
+    #             s3_bucket,
+    #             s3_key,
+    #             ExtraArgs={"ACL": "public-read", "ContentType": "video/mp4"}
+    #         )
+    #         concat_url = f"{public_base_url}/{s3_key}"
+    #         video_urls.append(concat_url)
+    #         print(f"[INFO] Uploaded concatenated video: {concat_url}")
+    #         send_callback("upload", {
+    #             "status": "SUCCESS",
+    #             "concat_url": concat_url,
+    #             "video_urls": video_urls
+    #         })
+    #     except Exception as e:
+    #         print("[WARN] Concat step failed:", e)
 
     # --- SUCCESS ---
     send_callback("success", {
