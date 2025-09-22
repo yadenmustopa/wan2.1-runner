@@ -28,13 +28,25 @@ import imageio
 DUMMY_MODE = os.environ.get("WAN_DUMMY", "0") == "1"
 
 def generate_dummy_video(save_path, frame_num=8, size=(256, 256)):
-    """Generate simple dummy video with random RGB frames"""
-    frames = []
-    for i in range(frame_num):
-        frame = np.random.randint(0, 255, (size[1], size[0], 3), dtype=np.uint8)
-        frames.append(frame)
-    imageio.mimsave(save_path, frames, fps=8)
-    print(f"[DUMMY] Saved dummy video at {save_path}")
+    """Generate simple dummy video with ffmpeg (valid mp4 with moov atom)."""
+    try:
+        import subprocess
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", f"testsrc=size={size[0]}x{size[1]}:rate=8",
+            "-t", str(frame_num / 8),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            save_path
+        ]
+        subprocess.run(cmd, check=True)
+        print(f"[DUMMY] Saved ffmpeg dummy video at {save_path}")
+    except Exception as e:
+        print("[ERROR] Failed to generate dummy video:", e)
+        # fallback: old random frames
+        import numpy as np, imageio
+        frames = [np.random.randint(0, 255, (size[1], size[0], 3), dtype=np.uint8) for _ in range(frame_num)]
+        imageio.mimsave(save_path, frames, fps=8, format="mp4")
+        print(f"[DUMMY] Saved fallback dummy video at {save_path}")
 
 EXAMPLE_PROMPT = {
     "t2v-1.3B": {
