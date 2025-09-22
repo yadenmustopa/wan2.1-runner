@@ -53,13 +53,10 @@ def send_callback(endpoint, payload):
         return
     url = f"{callback_url}/{endpoint}"
 
-    # base headers selalu JSON
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json"
     }
-
-    # tambahkan API key kalau ada
     if callback_api_key:
         headers["key"] = callback_api_key
 
@@ -100,7 +97,7 @@ def ensure_duration(in_path, out_path, target_sec):
 
 # ========================== MAIN ==========================
 try:
-    send_callback("process",{
+    send_callback("process", {
         "status": "PREPARING_PROCESSING",
         "generate_number": generate_number,
         "total_prompts": len(prompts),
@@ -115,6 +112,15 @@ try:
         "date_path": date_path,
     })
 
+    # --- Cari lokasi generate.py ---
+    candidates = [
+        os.path.join(project_dir, "Wan2.1"),                  # official clone
+        os.path.join(project_dir, "wan2.1-runner", "Wan2.1"), # repo kamu
+    ]
+    generate_dir = next((c for c in candidates if os.path.exists(os.path.join(c, "generate.py"))), None)
+    if not generate_dir:
+        raise FileNotFoundError("generate.py not found in expected locations.")
+
     for idx, prompt in enumerate(prompts):
         print(f"[INFO] ({idx+1}/{len(prompts)}) Generating: {prompt}")
         tmp_out = f"/tmp/{generate_number}_{idx}.mp4"
@@ -124,14 +130,14 @@ try:
         try:
             # --- GENERATE VIDEO ---
             cmd = f"python3 generate.py --task {wan_task} --size {wan_size} --ckpt_dir {shlex.quote(ckpt_dir)} --prompt {shlex.quote(prompt)}"
-            subprocess.run(cmd, cwd=os.path.join(project_dir, "Wan2.1"), shell=True, check=True)
-            produced = os.path.join(project_dir, "output.mp4")
+            subprocess.run(cmd, cwd=generate_dir, shell=True, check=True)
+            produced = os.path.join(generate_dir, "output.mp4")
             if not os.path.exists(produced):
                 produced = tmp_out
                 open(produced, "wb").write(b"DUMMY")
         except Exception as e:
             print("[ERROR] generate.py failed:", e)
-            send_callback("fail",{
+            send_callback("fail", {
                 "status": "FAILED",
                 "type_error": "GENERATE_FAILED",
                 "failed_reason": str(e),
@@ -152,7 +158,7 @@ try:
                 final_out,
                 s3_bucket,
                 s3_key,
-                ExtraArgs={"ACL": "public-read"}  # 🔑 penting supaya public
+                ExtraArgs={"ACL": "public-read", "ContentType": "video/mp4"}
             )
             video_url = f"{public_base_url}/{s3_key}"
             video_urls.append(video_url)
@@ -192,7 +198,6 @@ try:
     })
 
 except Exception as e:
-    # --- FAIL ---
     print("[FATAL] Pipeline failed:", e)
     send_callback("fail", {
         "status": "FAILED",
