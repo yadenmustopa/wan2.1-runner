@@ -14,11 +14,27 @@ import torch
 import torch.distributed as dist
 from PIL import Image
 
+
 import wan
 from wan.configs import MAX_AREA_CONFIGS, SIZE_CONFIGS, SUPPORTED_SIZES, WAN_CONFIGS
 from wan.utils.prompt_extend import DashScopePromptExpander, QwenPromptExpander
 from wan.utils.utils import cache_image, cache_video, str2bool
 
+
+import numpy as np
+import imageio
+
+# --- Dummy mode toggle via ENV ---
+DUMMY_MODE = os.environ.get("WAN_DUMMY", "0") == "1"
+
+def generate_dummy_video(save_path, frame_num=8, size=(256, 256)):
+    """Generate simple dummy video with random RGB frames"""
+    frames = []
+    for i in range(frame_num):
+        frame = np.random.randint(0, 255, (size[1], size[0], 3), dtype=np.uint8)
+        frames.append(frame)
+    imageio.mimsave(save_path, frames, fps=8)
+    print(f"[DUMMY] Saved dummy video at {save_path}")
 
 EXAMPLE_PROMPT = {
     "t2v-1.3B": {
