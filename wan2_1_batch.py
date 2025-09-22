@@ -52,12 +52,23 @@ def send_callback(endpoint, payload):
     if not callback_url:
         return
     url = f"{callback_url}/{endpoint}"
-    headers = {"key": f"{callback_api_key}"} if callback_api_key else {}
+
+    # base headers selalu JSON
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    # tambahkan API key kalau ada
+    if callback_api_key:
+        headers["key"] = callback_api_key
+
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=30)
         print(f"[CALLBACK:{endpoint}] {r.status_code} {r.text}")
     except Exception as e:
         print(f"[ERROR] Callback {endpoint} failed:", e)
+
 
 def ensure_duration(in_path, out_path, target_sec):
     """Pastikan durasi video sesuai target"""
