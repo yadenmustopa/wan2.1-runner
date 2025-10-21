@@ -20,10 +20,16 @@ public_base_url = os.environ.get("PUBLIC_BASE_URL", "")
 callback_url = os.environ.get("CALLBACK_URL", "")
 callback_api_key = os.environ.get("CALLBACK_API_KEY", "")
 
-project_dir = os.environ.get("PROJECT_DIR", "/root/project")
+# Model S3 configuration (for downloading models if needed)
+model_s3_endpoint = os.environ.get("MODEL_S3_ENDPOINT", "sgp1.vultrobjects.com")
+model_s3_bucket = os.environ.get("MODEL_S3_BUCKET", "mabar-app")
+model_s3_access_key = os.environ.get("MODEL_S3_ACCESS_KEY", s3_access_key)
+model_s3_secret_key = os.environ.get("MODEL_S3_SECRET_KEY", s3_secret_key)
+
+project_dir = os.environ.get("PROJECT_DIR", "/root")
 wan_task = os.environ.get("WAN_TASK", "t2v-1.3B")
 wan_size = os.environ.get("WAN_SIZE", "832*480")
-ckpt_dir = os.environ.get("CKPT_DIR", "/root/models/Wan2.1-T2V-1.3B")
+ckpt_dir = os.environ.get("CKPT_DIR", "/models/Wan2.1-T2V-1.3B")
 
 prompts_b64 = os.environ.get("PROMPTS_B64", "W10=")
 try:
@@ -118,6 +124,69 @@ def check_gpu():
         print("[ERROR] Gagal cek GPU:", e)
 
 check_gpu()
+
+# ========================== CHECK & DOWNLOAD MODELS ==========================
+def download_models_if_needed():
+    """Download models dari S3 Singapore jika belum ada di network volume"""
+    # Check if models exist
+    config_path = os.path.join(ckpt_dir, "config.json")
+    
+    if os.path.exists(config_path):
+        print(f"[INFO] Models found in {ckpt_dir}, using cached version")
+        return True
+    
+    print(f"[INFO] Models not found in {ckpt_dir}, downloading from S3...")
+    
+    try:
+        # Initialize S3 client for model download
+        s3_models = boto3.client('s3',
+            endpoint_url=f'https://{model_s3_endpoint}',
+            aws_access_key_id=model_s3_access_key,
+            aws_secret_access_key=model_s3_secret_key
+        )
+        
+        # Determine which model to download
+        if 'I2V' in ckpt_dir or 'i2v' in wan_task.lower():
+            model_path = 'models/Wan2.1-I2V-14B-480P'
+            files = [
+                'config.json',
+                'diffusion_pytorch_model.safetensors',
+                'Wan2.1_VAE.pth',
+            ]
+        else:
+            model_path = 'models/Wan2.1-T2V-1.3B'
+            files = [
+                'config.json',
+                'diffusion_pytorch_model.safetensors',
+                'Wan2.1_VAE.pth',
+                'models_t5_umt5-xxl-enc-bf16.pth',
+            ]
+        
+        # Create directory
+        os.makedirs(ckpt_dir, exist_ok=True)
+        
+        # Download each file
+        for f in files:
+            s3_key = f'{model_path}/{f}'
+            local_path = os.path.join(ckpt_dir, f)
+            
+            print(f"[DOWNLOAD] {f} from S3 Singapore...")
+            s3_models.download_file(model_s3_bucket, s3_key, local_path)
+            
+            size = os.path.getsize(local_path) / (1024*1024*1024)
+            print(f"[OK] {f} ({size:.2f} GB)")
+        
+        print(f"[INFO] Models downloaded successfully to {ckpt_dir}")
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to download models: {e}")
+        return False
+
+# Download models if needed (from network volume or S3)
+if not download_models_if_needed():
+    print("[FATAL] Cannot proceed without models")
+    sys.exit(1)
 
 # ========================== MAIN ==========================
 try:
